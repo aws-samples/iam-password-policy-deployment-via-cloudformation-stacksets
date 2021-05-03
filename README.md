@@ -8,15 +8,10 @@ CloudFormation StackSets make it easy to deploy AWS resources, via a CloudFormat
 ## Prerequisites
 - **AWS SAM CLI** - You can follow the AWS [documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html) for the installation of this tool
 - **S3 bucket** - An S3 bucket that SAM can use to orchestrate the deployment. You can use an existing bucket or create a new one
-- **AWS access keys configured** - You can follow the AWS [documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html) for detailed instructions. You need to have access keys for the management account. If you are deploying the solution from an EC2 instance, you can leverage an EC2 [instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) instead
+- **AWS access keys configured** - You can follow the AWS [documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html) for detailed instructions. You need to have access keys for the management account. If you are deploying the solution from an EC2 instance, you can leverage an EC2 [instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) instead, this eliminates the need to create access keys for an IAM user
 - **AWS Organizations management account** - AWS account where the stack set will be deployed
 - **Organizational unit (OU)** - AWS Organization's OU where you can place a member account
 - **Member account in the organization** - AWS account to be placed in an OU 
-
-## Limitations 
-
-Currently this solution cannot be deployed in an AWS [Delegated Administrator](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html) account as presented. There is an open [issue](https://github.com/aws-cloudformation/aws-cloudformation-coverage-roadmap/issues/799) in the [AWS CloudFormation Coverage Roadmap](https://github.com/aws-cloudformation/aws-cloudformation-coverage-roadmap) GitHub repository. This issue is to add CloudFormation support for deploying stack sets with service-managed permissions in a Delegated Administrator account. If you must deploy this solution in a delegated account at this moment, you can remove the stack set resource from the template.yaml file and deploy that resource manually from the AWS Console. You must first deploy the template.yaml file via the SAM CLI commands that will be presented in the deployment section of the project. 
-
 
 ## Use cases
 This solution can help you deploy a custom IAM password policy to accounts that are already members of an AWS Organizations OU. Once deployed, the solution will automatically deploy the specified password policy to new member accounts of the specified OU. 
@@ -197,10 +192,9 @@ Example
 
   *Figure 4*
 
+## Limitations 
 
-  ## Summary
-
-  In this sample code, I demonstrated how you can centrally manage the deployment of a an IAM password policy in your Organization. You use CloudFormation StackSets automated deployments to deploy your custom password policy as you provision new AWS accounts and place them in specific OU's. I also covered how you can easily update the password policy for an OU and monitor the progress using the AWS SAM CLI.
+Currently this solution cannot be deployed in an AWS [Delegated Administrator](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-delegated-admin.html) account using the instructions I provided in the deployment section. CloudFormation currently does not support creating stack sets with service-managed permissions in a Delegated Administration account. There is an open [issue](https://github.com/aws-cloudformation/aws-cloudformation-coverage-roadmap/issues/799) in the [AWS CloudFormation Coverage Roadmap](https://github.com/aws-cloudformation/aws-cloudformation-coverage-roadmap) GitHub repository to add this support.
 
 ## Security
 

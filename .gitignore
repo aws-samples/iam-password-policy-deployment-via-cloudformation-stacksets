@@ -1,2 +1,5 @@
 local/
 .DS_Store
+.vscode/
+.idea/
+.aws-sam/

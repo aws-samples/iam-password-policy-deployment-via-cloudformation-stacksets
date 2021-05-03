@@ -183,7 +183,7 @@ Resources:
               RequireSymbols: true
               RequireNumbers: false
               RequireUppercaseCharacters: true
-              RequireLowercaseCharacters: false
+              RequireLowercaseCharacters: true
               AllowUsersToChangePassword: true
               MaxPasswordAge: 10
               PasswordReusePrevention: 1
