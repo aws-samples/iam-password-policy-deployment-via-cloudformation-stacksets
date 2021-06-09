@@ -22,7 +22,7 @@ Resources:
   PasswordPolicyProviderFunction:
     Type: AWS::Serverless::Function 
     Properties:
-      FunctionName: !Sub ${ResourceNamePrefix}-password-policy-${Environment}
+      FunctionName: !Sub ${ResourceNamePrefix}-function-${Environment}
       Timeout: 20
       CodeUri: functions/password_policy/
       Handler: app.lambda_handler
@@ -33,11 +33,47 @@ Resources:
           AWS_PARTITION: !Sub ${AWS::Partition}
           AWS_ACCOUNT: !Sub ${AWS::AccountId}
           TARGET_ROLE: !Sub ${ResourceNamePrefix}-role-${Environment}
+  SNSTopicEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: SNS topic encryption key
+      EnableKeyRotation: true
+      PendingWindowInDays: 20
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: Main
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+          - Sid: Allow an external account to use this CMK
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref OrganizationID
+  SNSTopicEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/SNSTopicEncryption
+      TargetKeyId: !Ref SNSTopicEncryptionKey    
   PasswordPolicyTopic:
     Type: AWS::SNS::Topic
     Properties: 
-      DisplayName: !Sub ${ResourceNamePrefix}-password-policy-${Environment}
-      TopicName: !Sub ${ResourceNamePrefix}-password-policy-${Environment}
+      DisplayName: !Sub ${ResourceNamePrefix}-topic-${Environment}
+      TopicName: !Sub ${ResourceNamePrefix}-topic-${Environment}
+      KmsMasterKeyId: !Ref SNSTopicEncryptionKeyAlias
   PasswordPolicyTopicPolicy:
     Type: AWS::SNS::TopicPolicy
     Properties: 
@@ -107,6 +143,8 @@ Resources:
       - PasswordPolicyTopicPolicy
       - PasswordPolicyLambdaPermission
       - PasswordPolicyLambdaSubscription
+      - SNSTopicEncryptionKey
+      - SNSTopicEncryptionKeyAlias
     Properties: 
       AutoDeployment: 
         Enabled: true
