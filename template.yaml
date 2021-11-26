@@ -1,33 +1,79 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Deploys an IAM password policy via CloudFormation StackSets
 Parameters:
   ResourceNamePrefix:
-    Type: String 
+    Type: String
     Description: String prefix for resource names
-    Default: cfn-custom-resource-deployer
+    Default: iam-password-policy
   OrganizationID:
-    Type: String 
-    Description: The AWS organization ID. This parameter will be used to allow other accounts in the organization to communicate with the central account. 
+    Type: String
+    Description: The AWS organization ID. This parameter will be used to allow other accounts in the organization to communicate with the central account.
   Environment:
     Type: String
     Default: dev
-  TargetOU:
+  TargetOUs:
     Type: String
-    Description: The AWS Organizations OU to which the stack set template will be deployed
-Resources:  
+    Description: Comma separated list of The AWS Organizations OU to which the stack set template will be deployed
+
+  HardExpiry:
+    Type: String
+    Default: "false"
+    Description: (Optional) Prevents IAM users from setting a new password after their password has expired.
+
+  MinimumPasswordLength:
+    Type: String
+    Default: "24"
+    Description: (Optional) The minimum number of characters allowed in an IAM user password.
+
+  RequireLowercaseCharacters:
+    Type: String
+    Default: "true"
+    Description: (Optional) Specifies whether IAM user passwords must contain at least one lowercase character from the ISO basic Latin alphabet (a to z).
+
+  RequireSymbols:
+    Type: String
+    Default: "true"
+    Description: (Optional) Specifies whether IAM user passwords must contain at least one of the following non-alphanumeric characters :! @ \# $ % ^ * ( ) _ + - = [ ] { } | '.
+
+  AllowUsersToChangePassword:
+    Type: String
+    Default: "true"
+    Description: (Optional) Allows all IAM users in your AWS account to use the AWS Management Console to change their own passwords.
+
+  MaxPasswordAge:
+    Type: String
+    Default: "90"
+    Description: (Optional) The number of days that an IAM user password is valid.
+
+  PasswordReusePrevention:
+    Type: String
+    Default: "3"
+    Description: (Optional) Specifies the number of previous passwords that IAM users are prevented from reusing.
+
+  RequireNumbers:
+    Type: String
+    Default: "true"
+    Description: (Optional) Specifies whether IAM user passwords must contain at least one numeric character (0 to 9).
+
+  RequireUppercaseCharacters:
+    Type: String
+    Default: "true"
+    Description: (Optional) Specifies whether IAM user passwords must contain at least one uppercase character from the ISO basic Latin alphabet (A to Z).
+
+Resources:
   PasswordPolicyProviderFunction:
-    Type: AWS::Serverless::Function 
+    Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub ${ResourceNamePrefix}-function-${Environment}
       Timeout: 20
       CodeUri: functions/password_policy/
       Handler: app.lambda_handler
-      Runtime: python3.8
-      Role: !GetAtt  CustomResourceExecutionRole.Arn
+      Runtime: python3.9
+      Role: !GetAtt CustomResourceExecutionRole.Arn
       Environment:
         Variables:
           AWS_PARTITION: !Sub ${AWS::Partition}
@@ -40,7 +86,7 @@ Resources:
       EnableKeyRotation: true
       PendingWindowInDays: 20
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Id: Main
         Statement:
           - Sid: Enable IAM User Permissions
@@ -67,18 +113,18 @@ Resources:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: alias/SNSTopicEncryption
-      TargetKeyId: !Ref SNSTopicEncryptionKey    
+      TargetKeyId: !Ref SNSTopicEncryptionKey
   PasswordPolicyTopic:
     Type: AWS::SNS::Topic
-    Properties: 
+    Properties:
       DisplayName: !Sub ${ResourceNamePrefix}-topic-${Environment}
       TopicName: !Sub ${ResourceNamePrefix}-topic-${Environment}
       KmsMasterKeyId: !Ref SNSTopicEncryptionKeyAlias
   PasswordPolicyTopicPolicy:
     Type: AWS::SNS::TopicPolicy
-    Properties: 
+    Properties:
       PolicyDocument:
-        Version: 2008-10-17
+        Version: 2012-10-17
         Id: CrossAccountPublishAccess
         Statement:
           - Sid: allow-publish-from-organization-accounts
@@ -92,7 +138,7 @@ Resources:
             Condition:
               StringEquals:
                 aws:PrincipalOrgID: !Ref OrganizationID
-      Topics: 
+      Topics:
         - !Ref PasswordPolicyTopic
   PasswordPolicyLambdaSubscription:
     Type: AWS::SNS::Subscription
@@ -116,7 +162,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 'lambda.amazonaws.com'
+              Service: "lambda.amazonaws.com"
             Action: sts:AssumeRole
       Path: /
       Policies:
@@ -128,12 +174,12 @@ Resources:
                 Action:
                   - sts:AssumeRole
                 Resource:
-                  - !Sub 'arn:${AWS::Partition}:iam::*:role/${ResourceNamePrefix}-role-${Environment}'
+                  - !Sub "arn:${AWS::Partition}:iam::*:role/${ResourceNamePrefix}-role-${Environment}"
               - Effect: Allow
                 Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
                 Resource: "*"
   CFCustomResourceStackSet:
     Type: AWS::CloudFormation::StackSet
@@ -145,28 +191,49 @@ Resources:
       - PasswordPolicyLambdaSubscription
       - SNSTopicEncryptionKey
       - SNSTopicEncryptionKeyAlias
-    Properties: 
-      AutoDeployment: 
+    Properties:
+      ManagedExecution:
+        Active: true
+      AutoDeployment:
         Enabled: true
         RetainStacksOnAccountRemoval: false
-      Capabilities: 
+      Capabilities:
         - CAPABILITY_NAMED_IAM
-      Description: Custom resource deployer
+      Description: Iam Password Policy enablement
+      OperationPreferences:
+        MaxConcurrentCount: 2
       StackInstancesGroup:
-        - DeploymentTargets: 
-            OrganizationalUnitIds: 
-              - !Ref TargetOU
-          Regions: 
+        - DeploymentTargets:
+            OrganizationalUnitIds: !Split [",", !Ref TargetOUs]
+          Regions:
             - !Sub ${AWS::Region}
-      Parameters: 
+      Parameters:
         - ParameterKey: ResourceNamePrefix
           ParameterValue: !Ref ResourceNamePrefix
         - ParameterKey: TrustedRoleForCustomResources
-          ParameterValue: !GetAtt CustomResourceExecutionRole.Arn 
+          ParameterValue: !GetAtt CustomResourceExecutionRole.Arn
         - ParameterKey: PasswordPolicyTopicArn
           ParameterValue: !Ref PasswordPolicyTopic
         - ParameterKey: Environment
           ParameterValue: !Ref Environment
+        - ParameterKey: HardExpiry
+          ParameterValue: !Ref HardExpiry
+        - ParameterKey: MinimumPasswordLength
+          ParameterValue: !Ref MinimumPasswordLength
+        - ParameterKey: RequireLowercaseCharacters
+          ParameterValue: !Ref RequireLowercaseCharacters
+        - ParameterKey: RequireSymbols
+          ParameterValue: !Ref RequireSymbols
+        - ParameterKey: AllowUsersToChangePassword
+          ParameterValue: !Ref AllowUsersToChangePassword
+        - ParameterKey: MaxPasswordAge
+          ParameterValue: !Ref MaxPasswordAge
+        - ParameterKey: PasswordReusePrevention
+          ParameterValue: !Ref PasswordReusePrevention
+        - ParameterKey: RequireNumbers
+          ParameterValue: !Ref RequireNumbers
+        - ParameterKey: RequireUppercaseCharacters
+          ParameterValue: !Ref RequireUppercaseCharacters
 
       Tags:
         - Key: Environment
@@ -187,7 +254,43 @@ Resources:
             Type: String 
             Description: The ARN of the SNS topic for the custom password policy
           Environment:
-            Type: String  
+            Type: String
+          HardExpiry:
+            Type: String
+            Default: "false"
+            Description: (Optional) Prevents IAM users from setting a new password after their password has expired.
+          MinimumPasswordLength:
+            Type: String
+            Default: "16"
+            Description: (Optional) The minimum number of characters allowed in an IAM user password.
+          RequireLowercaseCharacters:
+            Type: String
+            Default: "true"
+            Description: (Optional) Specifies whether IAM user passwords must contain at least one lowercase character from the ISO basic Latin alphabet (a to z).
+          RequireSymbols:
+            Type: String
+            Default: "true"
+            Description: (Optional) Specifies whether IAM user passwords must contain at least one of the following non-alphanumeric characters :! @ \# $ % ^ * ( ) _ + - = [ ] { } | '.
+          AllowUsersToChangePassword:
+            Type: String
+            Default: "true"
+            Description: (Optional) Allows all IAM users in your AWS account to use the AWS Management Console to change their own passwords.
+          MaxPasswordAge:
+            Type: String
+            Default: "90"
+            Description: (Optional) The number of days that an IAM user password is valid.
+          PasswordReusePrevention:
+            Type: String
+            Default: "3"
+            Description: (Optional) Specifies the number of previous passwords that IAM users are prevented from reusing.
+          RequireNumbers:
+            Type: String
+            Default: "true"
+            Description: (Optional) Specifies whether IAM user passwords must contain at least one numeric character (0 to 9).
+          RequireUppercaseCharacters:
+            Type: String
+            Default: "true"
+            Description: (Optional) Specifies whether IAM user passwords must contain at least one uppercase character from the ISO basic Latin alphabet (A to Z).
         Resources:
           CFCustomResourceProviderRoleSpoke:
             Type: "AWS::IAM::Role"
@@ -217,15 +320,15 @@ Resources:
             DependsOn:
               - CFCustomResourceProviderRoleSpoke
             Properties:
-              MinimumPasswordLength: 10
-              RequireSymbols: true
-              RequireNumbers: false
-              RequireUppercaseCharacters: true
-              RequireLowercaseCharacters: true
-              AllowUsersToChangePassword: true
-              MaxPasswordAge: 10
-              PasswordReusePrevention: 1
-              HardExpiry: true
+              MinimumPasswordLength: !Ref MinimumPasswordLength
+              RequireSymbols: !Ref RequireSymbols
+              RequireNumbers: !Ref RequireNumbers
+              RequireUppercaseCharacters: !Ref RequireUppercaseCharacters
+              RequireLowercaseCharacters: !Ref RequireLowercaseCharacters
+              AllowUsersToChangePassword: !Ref AllowUsersToChangePassword
+              MaxPasswordAge: !Ref MaxPasswordAge
+              PasswordReusePrevention: !Ref PasswordReusePrevention
+              HardExpiry: !Ref HardExpiry
               ServiceToken: !Ref PasswordPolicyTopicArn
 Outputs:
   ResourceNamePrefix:
